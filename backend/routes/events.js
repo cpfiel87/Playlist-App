@@ -11,6 +11,14 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || '0.0.0.0';
 }
 
+async function verifyDjAuth(req, pinHash) {
+  const masterKey = req.headers['x-master-key'];
+  if (masterKey && masterKey === process.env.MASTER_KEY) return true;
+  const pin = req.headers['x-dj-pin'];
+  if (!pin) return false;
+  return bcrypt.compare(String(pin), pinHash);
+}
+
 // List all events (public)
 router.get('/', async (req, res) => {
   try {
@@ -30,7 +38,7 @@ router.get('/', async (req, res) => {
 
 // Create a new event (DJ)
 router.post('/', async (req, res) => {
-  const { eventName, djName, date, venue, pin } = req.body;
+  const { eventName, description, djName, date, venue, pin } = req.body;
 
   if (!eventName || !djName || !date || !venue || !pin) {
     return res.status(400).json({ error: 'All fields are required: eventName, djName, date, venue, pin' });
@@ -48,6 +56,7 @@ router.post('/', async (req, res) => {
       .from('events')
       .insert({
         event_name: eventName,
+        description: description || null,
         dj_name: djName,
         event_date: date,
         venue,
@@ -100,23 +109,20 @@ router.post('/dashboard/:djToken/verify', async (req, res) => {
   }
 });
 
-// Get DJ dashboard (requires PIN in header)
+// Get DJ dashboard (requires PIN or master key in header)
 router.get('/dashboard/:djToken', async (req, res) => {
   const { djToken } = req.params;
-  const pin = req.headers['x-dj-pin'];
-
-  if (!pin) return res.status(401).json({ error: 'PIN required' });
 
   try {
     const { data: event, error } = await supabase
       .from('events')
-      .select('id, pin_hash, event_name, dj_name, event_date, venue, status, guest_token, dj_token')
+      .select('id, pin_hash, event_name, description, dj_name, event_date, venue, status, guest_token, dj_token')
       .eq('dj_token', djToken)
       .single();
 
     if (error || !event) return res.status(404).json({ error: 'Event not found' });
 
-    const valid = await bcrypt.compare(String(pin), event.pin_hash);
+    const valid = await verifyDjAuth(req, event.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
 
     // Fetch wishlist sorted by request_count desc
@@ -137,9 +143,6 @@ router.get('/dashboard/:djToken', async (req, res) => {
 // Mark event as finished (DJ)
 router.put('/dashboard/:djToken/finish', async (req, res) => {
   const { djToken } = req.params;
-  const pin = req.headers['x-dj-pin'];
-
-  if (!pin) return res.status(401).json({ error: 'PIN required' });
 
   try {
     const { data: event, error } = await supabase
@@ -150,7 +153,7 @@ router.put('/dashboard/:djToken/finish', async (req, res) => {
 
     if (error || !event) return res.status(404).json({ error: 'Event not found' });
 
-    const valid = await bcrypt.compare(String(pin), event.pin_hash);
+    const valid = await verifyDjAuth(req, event.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
 
     const { error: updateError } = await supabase
@@ -167,6 +170,41 @@ router.put('/dashboard/:djToken/finish', async (req, res) => {
   }
 });
 
+// Delete event (DJ, requires PIN or master key)
+router.delete('/dashboard/:djToken', async (req, res) => {
+  const { djToken } = req.params;
+
+  try {
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('id, pin_hash')
+      .eq('dj_token', djToken)
+      .single();
+
+    if (error || !event) return res.status(404).json({ error: 'Event not found' });
+
+    const valid = await verifyDjAuth(req, event.pin_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
+
+    // Delete related data first
+    await supabase.from('event_votes').delete().eq('event_id', event.id);
+    await supabase.from('wishlist_requests').delete().eq('event_id', event.id);
+    await supabase.from('wishlist_items').delete().eq('event_id', event.id);
+
+    const { error: deleteError } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', event.id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({ success: true, message: 'Event deleted' });
+  } catch (err) {
+    console.error('Delete event error:', err);
+    res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
 // Get event for guests (public)
 router.get('/:guestToken', async (req, res) => {
   const { guestToken } = req.params;
@@ -174,7 +212,7 @@ router.get('/:guestToken', async (req, res) => {
   try {
     const { data: event, error } = await supabase
       .from('events')
-      .select('id, event_name, dj_name, event_date, venue, status, guest_token')
+      .select('id, event_name, description, dj_name, event_date, venue, status, guest_token')
       .eq('guest_token', guestToken)
       .single();
 

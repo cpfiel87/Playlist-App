@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 
 const API = import.meta.env.VITE_API_URL || '';
 const SESSION_KEY = (djToken) => `rtm_dj_pin_${djToken}`;
+const MASTER_KEY_SESSION = 'rtm_master_key';
 
 export default function DJDashboard() {
   const { djToken } = useParams();
@@ -11,18 +12,27 @@ export default function DJDashboard() {
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
   const [savedPin, setSavedPin] = useState(null);
+  const [masterKey, setMasterKey] = useState(null);
 
   const [event, setEvent] = useState(null);
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [finishConfirm, setFinishConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const pollRef = useRef(null);
 
-  // Check sessionStorage for already-verified PIN
+  // Check sessionStorage for already-verified PIN or master key
   useEffect(() => {
+    const storedMk = sessionStorage.getItem(MASTER_KEY_SESSION);
+    if (storedMk) {
+      setMasterKey(storedMk);
+      setVerified(true);
+      return;
+    }
     const stored = sessionStorage.getItem(SESSION_KEY(djToken));
     if (stored) {
       setSavedPin(stored);
@@ -30,13 +40,14 @@ export default function DJDashboard() {
     }
   }, [djToken]);
 
-  const loadDashboard = useCallback(async (p) => {
+  const loadDashboard = useCallback(async (p, mk) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/events/dashboard/${djToken}`, {
-        headers: { 'x-dj-pin': p },
-      });
+      const headers = mk
+        ? { 'x-master-key': mk }
+        : { 'x-dj-pin': p };
+      const res = await fetch(`${API}/api/events/dashboard/${djToken}`, { headers });
       if (res.status === 401) {
         setVerified(false);
         sessionStorage.removeItem(SESSION_KEY(djToken));
@@ -55,13 +66,12 @@ export default function DJDashboard() {
   }, [djToken]);
 
   useEffect(() => {
-    if (verified && savedPin) {
-      loadDashboard(savedPin);
-      // Poll every 6 seconds
-      pollRef.current = setInterval(() => loadDashboard(savedPin), 6000);
+    if (verified && (savedPin || masterKey)) {
+      loadDashboard(savedPin, masterKey);
+      pollRef.current = setInterval(() => loadDashboard(savedPin, masterKey), 6000);
     }
     return () => clearInterval(pollRef.current);
-  }, [verified, savedPin, loadDashboard]);
+  }, [verified, savedPin, masterKey, loadDashboard]);
 
   async function handleVerify(e) {
     e.preventDefault();
@@ -88,9 +98,10 @@ export default function DJDashboard() {
   async function handleFinishEvent() {
     setFinishing(true);
     try {
+      const headers = masterKey ? { 'x-master-key': masterKey } : { 'x-dj-pin': savedPin };
       const res = await fetch(`${API}/api/events/dashboard/${djToken}/finish`, {
         method: 'PUT',
-        headers: { 'x-dj-pin': savedPin },
+        headers,
       });
       if (!res.ok) throw new Error('Failed to finish event');
       setEvent(prev => ({ ...prev, status: 'finished' }));
@@ -99,6 +110,24 @@ export default function DJDashboard() {
       setError(err.message);
     } finally {
       setFinishing(false);
+    }
+  }
+
+  async function handleDeleteEvent() {
+    setDeleting(true);
+    try {
+      const headers = masterKey ? { 'x-master-key': masterKey } : { 'x-dj-pin': savedPin };
+      const res = await fetch(`${API}/api/events/dashboard/${djToken}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!res.ok) throw new Error('Failed to delete event');
+      // Redirect to events list after deletion
+      window.location.href = '/events';
+    } catch (err) {
+      setError(err.message);
+      setDeleting(false);
+      setDeleteConfirm(false);
     }
   }
 
@@ -172,6 +201,11 @@ export default function DJDashboard() {
             {event?.event_date && new Date(event.event_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             &nbsp;·&nbsp; {event?.venue}
           </p>
+          {event?.description && (
+            <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: '0.9rem', lineHeight: 1.6, fontFamily: 'var(--font-body)' }}>
+              {event.description}
+            </p>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -213,6 +247,29 @@ export default function DJDashboard() {
                 </button>
               </div>
             )
+          )}
+
+          {!deleteConfirm ? (
+            <button
+              className="btn btn--ghost"
+              style={{ color: 'var(--text-dim)', borderColor: 'var(--border)' }}
+              onClick={() => setDeleteConfirm(true)}
+            >
+              Delete Event
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn--danger"
+                onClick={handleDeleteEvent}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Confirm Delete'}
+              </button>
+              <button className="btn btn--ghost" onClick={() => setDeleteConfirm(false)}>
+                Cancel
+              </button>
+            </div>
           )}
         </div>
       </div>

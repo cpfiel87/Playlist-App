@@ -6,6 +6,7 @@ const API = import.meta.env.VITE_API_URL || '';
 export default function EventCreate() {
   const [form, setForm] = useState({
     eventName: '',
+    description: '',
     djName: '',
     date: '',
     venue: '',
@@ -37,6 +38,8 @@ export default function EventCreate() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create event');
+      // Pre-store PIN so dashboard doesn't ask again
+      sessionStorage.setItem(`rtm_dj_pin_${data.event.dj_token}`, form.pin);
       setCreated({
         ...data,
         guestUrl: `${window.location.origin}/event/${data.event.guest_token}`,
@@ -150,6 +153,19 @@ export default function EventCreate() {
             onChange={handleChange}
             placeholder="Friday Night Sessions"
             required
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Description <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>(optional)</span></label>
+          <textarea
+            className="form-input"
+            name="description"
+            value={form.description}
+            onChange={handleChange}
+            placeholder="Tell your guests what to expect tonight…"
+            rows={3}
+            style={{ resize: 'vertical' }}
           />
         </div>
 

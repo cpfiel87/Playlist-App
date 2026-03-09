@@ -4,6 +4,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import songsRouter from './routes/songs.js';
 import eventsRouter from './routes/events.js';
+import adminRouter from './routes/admin.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -40,6 +41,7 @@ app.use(limiter);
 // Routes
 app.use('/api/songs', songsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/admin', adminRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -53,5 +55,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Rate The Music API running on port ${PORT}`);
+  console.log(`Voting Tool for Socials API running on port ${PORT}`);
 });

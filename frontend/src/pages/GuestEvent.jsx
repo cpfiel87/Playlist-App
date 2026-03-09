@@ -89,6 +89,11 @@ export default function GuestEvent() {
           {event?.event_date && new Date(event.event_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           &nbsp;·&nbsp; {event?.venue}
         </p>
+        {event?.description && (
+          <p style={{ color: 'var(--text-muted)', marginTop: 10, fontSize: '0.95rem', lineHeight: 1.6 }}>
+            {event.description}
+          </p>
+        )}
       </div>
 
       {/* Two-column layout */}

@@ -87,7 +87,7 @@ export default function VotingPage() {
       )}
 
       <div style={{ marginTop: 48, textAlign: 'center' }}>
-        <Link to="/" className="btn btn--ghost">Back to Rate The Music</Link>
+        <Link to="/" className="btn btn--ghost">Back to Home</Link>
       </div>
     </main>
   );

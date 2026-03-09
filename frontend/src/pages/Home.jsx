@@ -1,99 +1,66 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import SearchBar from '../components/SearchBar.jsx';
-import SongCard from '../components/SongCard.jsx';
 
 export default function Home() {
-  const [results, setResults] = useState([]);
-  const [hasSearched, setHasSearched] = useState(false);
-
-  function handleResults(songs) {
-    setResults(songs);
-    setHasSearched(true);
-  }
-
   return (
     <main className="page">
       {/* Hero */}
       <section className="hero">
-        <p className="hero__eyebrow">Community Music Ratings</p>
+        <p className="hero__eyebrow">DJ Playlist Manager</p>
         <h1 className="hero__title">
-          Rate The <em>Music</em>
+          Let The <em>Crowd</em> Decide
         </h1>
         <p className="hero__subtitle">
-          Search any song. Rate it 1 to 10. See what the crowd thinks.
+          Create an event, share the link, and let your guests request the songs they want to hear.
         </p>
 
-        <div style={{ maxWidth: 600, margin: '0 auto 48px' }}>
-          <SearchBar onResults={handleResults} />
-        </div>
-
-        {!hasSearched && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 24,
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-              marginTop: 24,
-            }}
-          >
-            <FeatureCard
-              icon="⭐"
-              title="Rate Any Song"
-              desc="Search the iTunes catalog and rate songs 1 to 10. One vote per song."
-            />
-            <FeatureCard
-              icon="🎛"
-              title="Host Events"
-              desc="DJs can create events with a live wishlist ranked by crowd requests."
-            />
-            <FeatureCard
-              icon="🗳"
-              title="Post-Event Voting"
-              desc="After the night ends, guests vote on the songs that were played."
-            />
-          </div>
-        )}
-      </section>
-
-      {/* Results */}
-      {hasSearched && (
-        <section>
-          <div className="row" style={{ marginBottom: 16 }}>
-            <span className="label">
-              {results.length > 0 ? `${results.length} results` : 'No results found'}
-            </span>
-          </div>
-
-          {results.length === 0 && (
-            <div className="empty">
-              <div className="empty__icon">♪</div>
-              <p className="empty__text">No songs found. Try a different search.</p>
-            </div>
-          )}
-
-          <div className="stack">
-            {results.map(song => (
-              <SongCard key={song.trackId} song={song} mode="rate" />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* CTA */}
-      {!hasSearched && (
-        <section style={{ textAlign: 'center', marginTop: 64 }}>
-          <div className="divider" style={{ marginBottom: 40 }} />
-          <h2 style={{ marginBottom: 16 }}>Hosting a set tonight?</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
-            Create an event and let your crowd tell you what they want to hear.
-          </p>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 32 }}>
           <Link to="/create-event" className="btn btn--primary">
             Create Event
           </Link>
-        </section>
-      )}
+          <Link to="/events" className="btn btn--ghost">
+            Browse Events
+          </Link>
+        </div>
+      </section>
+
+      {/* Feature cards */}
+      <section
+        style={{
+          display: 'flex',
+          gap: 24,
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+          marginTop: 64,
+        }}
+      >
+        <FeatureCard
+          icon="🎛"
+          title="Host an Event"
+          desc="Create an event with a PIN-protected dashboard. Share the guest link and watch requests roll in."
+        />
+        <FeatureCard
+          icon="🎵"
+          title="Guest Wishlists"
+          desc="Guests search the iTunes catalog and request songs. The most-wanted tracks rise to the top."
+        />
+        <FeatureCard
+          icon="🗳"
+          title="Post-Event Voting"
+          desc="After the night ends, guests can vote on the songs that were played."
+        />
+      </section>
+
+      {/* CTA */}
+      <section style={{ textAlign: 'center', marginTop: 80 }}>
+        <div className="divider" style={{ marginBottom: 40 }} />
+        <h2 style={{ marginBottom: 16 }}>Ready to host?</h2>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
+          Set up your event in seconds. No account needed.
+        </p>
+        <Link to="/create-event" className="btn btn--primary">
+          Get Started
+        </Link>
+      </section>
     </main>
   );
 }

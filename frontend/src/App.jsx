@@ -5,16 +5,16 @@ import EventsList from './pages/EventsList.jsx';
 import GuestEvent from './pages/GuestEvent.jsx';
 import DJDashboard from './pages/DJDashboard.jsx';
 import VotingPage from './pages/VotingPage.jsx';
+import Admin from './pages/Admin.jsx';
 
 export default function App() {
   return (
     <>
       <nav className="nav">
         <Link to="/" className="nav__logo">
-          Rate The <span>Music</span>
+          Voting Tool <span>for Socials</span>
         </Link>
         <ul className="nav__links">
-          <li><NavLink to="/">Discover</NavLink></li>
           <li><NavLink to="/events">Events</NavLink></li>
           <li><NavLink to="/create-event">Host Event</NavLink></li>
         </ul>
@@ -27,6 +27,7 @@ export default function App() {
         <Route path="/event/:guestToken" element={<GuestEvent />} />
         <Route path="/event/:guestToken/vote" element={<VotingPage />} />
         <Route path="/dashboard/:djToken" element={<DJDashboard />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 
@@ -37,7 +38,7 @@ export default function App() {
         marginTop: '80px',
       }}>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
-          RATE THE MUSIC — POWERED BY ITUNES &amp; SUPABASE
+          VOTING TOOL FOR SOCIALS — POWERED BY ITUNES &amp; SUPABASE
         </p>
       </footer>
     </>
