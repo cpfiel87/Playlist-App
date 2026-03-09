@@ -1,5 +1,17 @@
 # Playlist App
 
+## Description
+
+1. Tool is Free forever.
+2. DJ can create an event.
+3. Users can add wishsongs to an event.
+4. After the event people can vote the songs. 
+
+It is a easier way to get the songs people want. 
+I will test it when I will be a DJ. Maybe useful for you too :). 
+
+This version stays frozen until further notice.
+
 ## Organization: Charmander
 
 ### Project name: Playlist App

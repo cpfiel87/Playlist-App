@@ -40,6 +40,32 @@ export default function App() {
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
           VOTING TOOL FOR SOCIALS — POWERED BY ITUNES &amp; SUPABASE
         </p>
+        <a
+          href="https://www.instagram.com/gatokusi"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 10,
+            color: 'var(--text-dim)',
+            textDecoration: 'none',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.65rem',
+            letterSpacing: '0.1em',
+            transition: 'color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-dim)'}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+            <circle cx="12" cy="12" r="4.5"/>
+            <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+          @gatokusi
+        </a>
       </footer>
     </>
   );

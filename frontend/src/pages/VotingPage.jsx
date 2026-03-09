@@ -33,6 +33,26 @@ export default function VotingPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  function exportCSV() {
+    const headers = ['Title', 'Artist', 'Album', 'Requests', 'Avg Rating', 'Total Votes'];
+    const rows = wishlist.map(item => [
+      `"${(item.title || '').replace(/"/g, '""')}"`,
+      `"${(item.artist || '').replace(/"/g, '""')}"`,
+      `"${(item.album || '').replace(/"/g, '""')}"`,
+      item.request_count,
+      item.averageRating ?? '',
+      item.totalVotes ?? '',
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${event?.event_name || 'event'}-votes.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
 
   if (error) return (
@@ -61,11 +81,18 @@ export default function VotingPage() {
         <div className="divider" style={{ marginTop: 24 }} />
       </div>
 
-      <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: '1.4rem', marginBottom: 8 }}>How was the music?</h2>
-        <p style={{ color: 'var(--text-muted)' }}>
-          Rate every song that was on tonight's wishlist. One vote per song.
-        </p>
+      <div style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: '1.4rem', marginBottom: 8 }}>How was the music?</h2>
+          <p style={{ color: 'var(--text-muted)' }}>
+            Rate every song that was on tonight's wishlist. One vote per song.
+          </p>
+        </div>
+        {wishlist.length > 0 && (
+          <button className="btn btn--ghost" onClick={exportCSV} style={{ fontSize: '0.8rem' }}>
+            Export CSV
+          </button>
+        )}
       </div>
 
       {wishlist.length === 0 ? (

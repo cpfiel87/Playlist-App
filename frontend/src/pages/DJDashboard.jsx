@@ -131,6 +131,24 @@ export default function DJDashboard() {
     }
   }
 
+  function exportCSV() {
+    const headers = ['Title', 'Artist', 'Album', 'Requests'];
+    const rows = wishlist.map(item => [
+      `"${(item.title || '').replace(/"/g, '""')}"`,
+      `"${(item.artist || '').replace(/"/g, '""')}"`,
+      `"${(item.album || '').replace(/"/g, '""')}"`,
+      item.request_count,
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${event?.event_name || 'wishlist'}-wishlist.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function copyGuestLink() {
     if (!event) return;
     const url = `${window.location.origin}/event/${event.guest_token}`;
@@ -298,12 +316,19 @@ export default function DJDashboard() {
       </div>
 
       {/* Wishlist */}
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: '1.2rem' }}>Crowd Wishlist — Ranked by Requests</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
-          Updates every 6 seconds.
-          {loading && <span style={{ color: 'var(--accent)', marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Refreshing…</span>}
-        </p>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: '1.2rem' }}>Crowd Wishlist — Ranked by Requests</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
+            Updates every 6 seconds.
+            {loading && <span style={{ color: 'var(--accent)', marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Refreshing…</span>}
+          </p>
+        </div>
+        {wishlist.length > 0 && (
+          <button className="btn btn--ghost" onClick={exportCSV} style={{ fontSize: '0.8rem' }}>
+            Export CSV
+          </button>
+        )}
       </div>
 
       {wishlist.length === 0 ? (
