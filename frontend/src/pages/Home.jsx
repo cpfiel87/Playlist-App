@@ -45,8 +45,8 @@ export default function Home() {
         />
         <FeatureCard
           icon="🗳"
-          title="Post-Event Voting"
-          desc="After the night ends, guests can vote on the songs that were played."
+          title="Post-Event Rating"
+          desc="After the night ends, guests can rate the event and leave a comment."
         />
       </section>
 

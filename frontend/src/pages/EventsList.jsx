@@ -5,6 +5,7 @@ const API = import.meta.env.VITE_API_URL || '';
 
 export default function EventsList() {
   const [events, setEvents] = useState([]);
+  const [eventRatings, setEventRatings] = useState({}); // guestToken → { avgStars, totalRatings }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pinPrompt, setPinPrompt] = useState(null); // { djToken, eventName }
@@ -16,7 +17,28 @@ export default function EventsList() {
   useEffect(() => {
     fetch(`${API}/api/events`)
       .then(r => r.json())
-      .then(data => setEvents(data.events || []))
+      .then(async data => {
+        const evts = data.events || [];
+        setEvents(evts);
+        // Fetch avg ratings for finished events in parallel
+        const finished = evts.filter(e => e.status === 'finished');
+        const results = await Promise.allSettled(
+          finished.map(e =>
+            fetch(`${API}/api/events/${e.guest_token}/ratings`).then(r => r.ok ? r.json() : null)
+          )
+        );
+        const ratingsMap = {};
+        finished.forEach((e, i) => {
+          const r = results[i];
+          if (r.status === 'fulfilled' && r.value) {
+            ratingsMap[e.guest_token] = {
+              avgStars: r.value.averageStars,
+              totalRatings: r.value.totalRatings,
+            };
+          }
+        });
+        setEventRatings(ratingsMap);
+      })
       .catch(() => setError('Failed to load events'))
       .finally(() => setLoading(false));
   }, []);
@@ -71,37 +93,45 @@ export default function EventsList() {
         <p style={{ color: 'var(--text-muted)' }}>No events yet.</p>
       ) : (
         <div className="stack" style={{ gap: 16 }}>
-          {events.map(event => (
-            <div key={event.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                  <h3 style={{ margin: 0 }}>{event.event_name}</h3>
-                  <span className="label" style={{ color: event.status === 'active' ? 'var(--accent)' : 'var(--text-dim)', fontSize: '0.65rem' }}>
-                    {event.status === 'active' ? 'LIVE' : 'FINISHED'}
-                  </span>
+          {events.map(event => {
+            const r = eventRatings[event.guest_token];
+            return (
+              <div key={event.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0 }}>{event.event_name}</h3>
+                    <span className="label" style={{ color: event.status === 'active' ? 'var(--accent)' : 'var(--text-dim)', fontSize: '0.65rem' }}>
+                      {event.status === 'active' ? 'LIVE' : 'FINISHED'}
+                    </span>
+                    {r && r.avgStars !== null && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        ★ {r.avgStars} · {r.totalRatings} {r.totalRatings === 1 ? 'rating' : 'ratings'}
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    {event.dj_name} · {new Date(event.event_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} · {event.venue}
+                  </p>
                 </div>
-                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  {event.dj_name} · {new Date(event.event_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} · {event.venue}
-                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <a
+                    href={`/view/${event.guest_token}`}
+                    className="btn btn--ghost"
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  >
+                    View Event
+                  </a>
+                  <button
+                    className="btn btn--primary"
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                    onClick={() => openPinPrompt(event)}
+                  >
+                    DJ Access
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <a
-                  href={`/event/${event.guest_token}`}
-                  className="btn btn--ghost"
-                  style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
-                >
-                  View Wishlist
-                </a>
-                <button
-                  className="btn btn--primary"
-                  style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
-                  onClick={() => openPinPrompt(event)}
-                >
-                  DJ Access
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import StarRating from '../components/StarRating.jsx';
 
 const API = import.meta.env.VITE_API_URL || '';
 const SESSION_KEY = (djToken) => `rtm_dj_pin_${djToken}`;
@@ -23,6 +24,9 @@ export default function DJDashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [ratings, setRatings] = useState([]);
+  const [avgStars, setAvgStars] = useState(null);
+  const [totalRatings, setTotalRatings] = useState(0);
   const pollRef = useRef(null);
 
   // Check sessionStorage for already-verified PIN or master key
@@ -39,6 +43,18 @@ export default function DJDashboard() {
       setVerified(true);
     }
   }, [djToken]);
+
+  const loadRatings = useCallback(async (guestToken) => {
+    if (!guestToken) return;
+    try {
+      const res = await fetch(`${API}/api/events/${guestToken}/ratings`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setRatings(data.ratings || []);
+      setAvgStars(data.averageStars);
+      setTotalRatings(data.totalRatings);
+    } catch {}
+  }, []);
 
   const loadDashboard = useCallback(async (p, mk) => {
     setLoading(true);
@@ -58,12 +74,15 @@ export default function DJDashboard() {
       const data = await res.json();
       setEvent(data.event);
       setWishlist(data.wishlist || []);
+      if (data.event?.status === 'finished') {
+        loadRatings(data.event.guest_token);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [djToken]);
+  }, [djToken, loadRatings]);
 
   useEffect(() => {
     if (verified && (savedPin || masterKey)) {
@@ -213,7 +232,17 @@ export default function DJDashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <span className="label" style={{ color: 'var(--accent)' }}>DJ Dashboard</span>
-          <h1 style={{ marginTop: 8 }}>{event?.event_name}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
+            <h1 style={{ margin: 0 }}>{event?.event_name}</h1>
+            {event?.status === 'finished' && avgStars !== null && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <StarRating value={avgStars} size={18} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {avgStars} · {totalRatings} {totalRatings === 1 ? 'rating' : 'ratings'}
+                </span>
+              </div>
+            )}
+          </div>
           <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', marginTop: 6 }}>
             {event?.dj_name} &nbsp;·&nbsp;{' '}
             {event?.event_date && new Date(event.event_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -236,14 +265,7 @@ export default function DJDashboard() {
             {copied ? 'Copied!' : 'Copy Guest Link'}
           </button>
 
-          {event?.status === 'finished' ? (
-            <Link
-              to={`/event/${event.guest_token}/vote`}
-              className="btn btn--primary"
-            >
-              Open Voting Page
-            </Link>
-          ) : (
+          {event?.status !== 'finished' && (
             !finishConfirm ? (
               <button
                 className="btn btn--danger"
@@ -315,36 +337,87 @@ export default function DJDashboard() {
         {wishlist[0] && <Stat label="Most Wanted" value={wishlist[0].title} mono={false} />}
       </div>
 
-      {/* Wishlist */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h2 style={{ fontSize: '1.2rem' }}>Crowd Wishlist — Ranked by Requests</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
-            Updates every 6 seconds.
-            {loading && <span style={{ color: 'var(--accent)', marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Refreshing…</span>}
-          </p>
-        </div>
-        {wishlist.length > 0 && (
-          <button className="btn btn--ghost" onClick={exportCSV} style={{ fontSize: '0.8rem' }}>
-            Export CSV
-          </button>
-        )}
-      </div>
+      {event?.status === 'finished' ? (
+        /* Two-column layout for finished events: ratings left, wishlist right */
+        <div
+          className="dj-finished-layout"
+          style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,360px)', gap: 32, alignItems: 'start' }}
+        >
+          <RatingsPanel
+            ratings={ratings}
+            avgStars={avgStars}
+            totalRatings={totalRatings}
+            djToken={djToken}
+            savedPin={savedPin}
+            masterKey={masterKey}
+            onDelete={id => {
+              setRatings(prev => prev.filter(r => r.id !== id));
+              setTotalRatings(prev => prev - 1);
+            }}
+          />
 
-      {wishlist.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-          <div style={{ fontSize: '2rem', marginBottom: 12, opacity: 0.3 }}>♪</div>
-          <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-            No requests yet. Share the guest link to get things started.
-          </p>
+          <section>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Crowd Wishlist</h2>
+              {wishlist.length > 0 && (
+                <button className="btn btn--ghost" onClick={exportCSV} style={{ fontSize: '0.8rem' }}>
+                  Export CSV
+                </button>
+              )}
+            </div>
+            {wishlist.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: 8, opacity: 0.3 }}>♪</div>
+                <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>No requests.</p>
+              </div>
+            ) : (
+              <div className="stack" style={{ gap: 8 }}>
+                {wishlist.map((item, i) => (
+                  <DashboardWishlistRow key={item.id} item={item} rank={i + 1} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       ) : (
-        <div className="stack" style={{ gap: 8 }}>
-          {wishlist.map((item, i) => (
-            <DashboardWishlistRow key={item.id} item={item} rank={i + 1} />
-          ))}
-        </div>
+        /* Active event: full-width wishlist */
+        <>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: '1.2rem' }}>Crowd Wishlist — Ranked by Requests</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
+                Updates every 6 seconds.
+                {loading && <span style={{ color: 'var(--accent)', marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Refreshing…</span>}
+              </p>
+            </div>
+            {wishlist.length > 0 && (
+              <button className="btn btn--ghost" onClick={exportCSV} style={{ fontSize: '0.8rem' }}>
+                Export CSV
+              </button>
+            )}
+          </div>
+          {wishlist.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 48 }}>
+              <div style={{ fontSize: '2rem', marginBottom: 12, opacity: 0.3 }}>♪</div>
+              <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                No requests yet. Share the guest link to get things started.
+              </p>
+            </div>
+          ) : (
+            <div className="stack" style={{ gap: 8 }}>
+              {wishlist.map((item, i) => (
+                <DashboardWishlistRow key={item.id} item={item} rank={i + 1} />
+              ))}
+            </div>
+          )}
+        </>
       )}
+
+      <style>{`
+        @media (max-width: 720px) {
+          .dj-finished-layout { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </main>
   );
 }
@@ -360,6 +433,67 @@ function Stat({ label, value, mono = true }) {
         color: 'var(--text)',
       }}>{value ?? '—'}</div>
     </div>
+  );
+}
+
+function RatingsPanel({ ratings, avgStars, totalRatings, djToken, savedPin, masterKey, onDelete }) {
+  const [deletingId, setDeletingId] = useState(null);
+
+  async function handleDelete(ratingId) {
+    setDeletingId(ratingId);
+    try {
+      const headers = masterKey
+        ? { 'x-master-key': masterKey }
+        : { 'x-dj-pin': savedPin };
+      const res = await fetch(`${API}/api/events/dashboard/${djToken}/ratings/${ratingId}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (res.ok) onDelete(ratingId);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <section>
+      <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>
+        {totalRatings > 0 ? `${totalRatings} ${totalRatings === 1 ? 'Rating' : 'Ratings'}` : 'Ratings'}
+      </h2>
+      {ratings.length === 0 ? (
+        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+          <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+            No ratings yet.
+          </p>
+        </div>
+      ) : (
+        <div className="stack" style={{ gap: 12 }}>
+          {ratings.map(r => (
+            <div key={r.id} className="card" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <StarRating value={r.stars} size={18} />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                    {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                  {r.comment}
+                </p>
+              </div>
+              <button
+                className="btn btn--ghost"
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', color: 'var(--text-dim)', flexShrink: 0 }}
+                onClick={() => handleDelete(r.id)}
+                disabled={deletingId === r.id}
+              >
+                {deletingId === r.id ? '…' : 'Delete'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

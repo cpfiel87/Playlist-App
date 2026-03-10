@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import SearchBar from '../components/SearchBar.jsx';
 import SongCard from '../components/SongCard.jsx';
+import StarRating from '../components/StarRating.jsx';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -56,21 +57,7 @@ export default function GuestEvent() {
   );
 
   if (event?.status === 'finished') {
-    return (
-      <main className="page" style={{ maxWidth: 640, textAlign: 'center', paddingTop: 80 }}>
-        <span className="badge badge--finished" style={{ display: 'inline-flex', marginBottom: 24 }}>
-          <span className="badge--dot" />
-          Event Ended
-        </span>
-        <h1 style={{ marginBottom: 16 }}>{event.event_name}</h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>
-          The event is over. Head to the voting page to rate the songs that were played tonight.
-        </p>
-        <Link to={`/event/${guestToken}/vote`} className="btn btn--primary" style={{ padding: '0.75rem 2rem' }}>
-          Rate Tonight's Songs
-        </Link>
-      </main>
-    );
+    return <FinishedEvent event={event} guestToken={guestToken} />;
   }
 
   return (
@@ -164,6 +151,143 @@ export default function GuestEvent() {
           }
         }
       `}</style>
+    </main>
+  );
+}
+
+function FinishedEvent({ event, guestToken }) {
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [ratings, setRatings] = useState([]);
+  const [avgStars, setAvgStars] = useState(null);
+  const [totalRatings, setTotalRatings] = useState(0);
+  const [alreadyRated, setAlreadyRated] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+
+  const loadRatings = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/events/${guestToken}/ratings`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setRatings(data.ratings || []);
+      setAvgStars(data.averageStars);
+      setTotalRatings(data.totalRatings);
+      setAlreadyRated(data.alreadyRated);
+    } catch {}
+  }, [guestToken]);
+
+  useEffect(() => { loadRatings(); }, [loadRatings]);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (stars < 1 || comment.trim().length < 1) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch(`${API}/api/events/${guestToken}/ratings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stars, comment }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to submit rating');
+      }
+      setSubmitted(true);
+      await loadRatings();
+    } catch (err) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="page" style={{ maxWidth: 640 }}>
+      <div style={{ textAlign: 'center', paddingTop: 60, marginBottom: 40 }}>
+        <span className="badge badge--finished" style={{ display: 'inline-flex', marginBottom: 24 }}>
+          <span className="badge--dot" />
+          Event Ended
+        </span>
+        <h1 style={{ marginBottom: 8 }}>{event.event_name}</h1>
+        <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+          {event.dj_name} &nbsp;·&nbsp; {event.venue}
+        </p>
+      </div>
+
+      {!alreadyRated && !submitted ? (
+        <div className="card" style={{ padding: 28, marginBottom: 32 }}>
+          <h2 style={{ fontSize: '1.1rem', marginBottom: 20 }}>Rate This Event</h2>
+          <form onSubmit={handleSubmit} className="stack" style={{ gap: 20 }}>
+            <div>
+              <label className="form-label" style={{ display: 'block', marginBottom: 10 }}>Stars</label>
+              <StarRating value={stars} onChange={setStars} size={32} />
+            </div>
+            <div>
+              <label className="form-label">Comment</label>
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  className="form-input"
+                  value={comment}
+                  onChange={e => setComment(e.target.value.slice(0, 100))}
+                  placeholder="Share your experience…"
+                  rows={4}
+                  style={{ resize: 'vertical', paddingBottom: 28 }}
+                />
+                <span style={{
+                  position: 'absolute', bottom: 8, right: 12,
+                  fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
+                  color: comment.length >= 90 ? 'var(--accent)' : 'var(--text-dim)',
+                  pointerEvents: 'none',
+                }}>
+                  {comment.length}/100
+                </span>
+              </div>
+            </div>
+            {submitError && <div className="alert alert--error">{submitError}</div>}
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={submitting || stars < 1 || comment.trim().length < 1}
+            >
+              {submitting ? 'Submitting…' : 'Submit Rating'}
+            </button>
+          </form>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 28, marginBottom: 32, textAlign: 'center' }}>
+          <div style={{ fontSize: '2rem', marginBottom: 8, color: '#FFB800' }}>★</div>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Thanks for your rating!</p>
+        </div>
+      )}
+
+      {totalRatings > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Ratings</h2>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              ★ {avgStars} · {totalRatings} {totalRatings === 1 ? 'rating' : 'ratings'}
+            </span>
+          </div>
+          <div className="stack" style={{ gap: 12 }}>
+            {ratings.map(r => (
+              <div key={r.id} className="card" style={{ padding: '14px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <StarRating value={r.stars} size={16} />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-dim)' }}>
+                    {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  {r.comment}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

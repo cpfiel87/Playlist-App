@@ -4,7 +4,7 @@ import EventCreate from './pages/EventCreate.jsx';
 import EventsList from './pages/EventsList.jsx';
 import GuestEvent from './pages/GuestEvent.jsx';
 import DJDashboard from './pages/DJDashboard.jsx';
-import VotingPage from './pages/VotingPage.jsx';
+import EventView from './pages/EventView.jsx';
 import Admin from './pages/Admin.jsx';
 
 export default function App() {
@@ -12,7 +12,7 @@ export default function App() {
     <>
       <nav className="nav">
         <Link to="/" className="nav__logo">
-          Voting Tool <span>for Socials</span>
+          Rating Tool <span>for Socials</span>
         </Link>
         <ul className="nav__links">
           <li><NavLink to="/events">Events</NavLink></li>
@@ -25,7 +25,7 @@ export default function App() {
         <Route path="/create-event" element={<EventCreate />} />
         <Route path="/events" element={<EventsList />} />
         <Route path="/event/:guestToken" element={<GuestEvent />} />
-        <Route path="/event/:guestToken/vote" element={<VotingPage />} />
+        <Route path="/view/:guestToken" element={<EventView />} />
         <Route path="/dashboard/:djToken" element={<DJDashboard />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<NotFound />} />
@@ -38,7 +38,7 @@ export default function App() {
         marginTop: '80px',
       }}>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
-          VOTING TOOL FOR SOCIALS — POWERED BY ITUNES &amp; SUPABASE
+          RATING TOOL FOR SOCIALS — POWERED BY ITUNES &amp; SUPABASE
         </p>
         <a
           href="https://www.instagram.com/gatokusi"

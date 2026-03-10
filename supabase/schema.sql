@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS wishlist_requests (
 );
 
 -- ─────────────────────────────────────────
--- Post-event votes for songs on the wishlist
+-- Post-event votes for songs on the wishlist (legacy, no longer used)
 -- ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS event_votes (
   id              uuid    DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -83,6 +83,19 @@ CREATE TABLE IF NOT EXISTS event_votes (
 );
 
 -- ─────────────────────────────────────────
+-- Post-event event ratings (1–5 stars + comment)
+-- ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS event_ratings (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id   uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  ip_address text NOT NULL,
+  stars      integer NOT NULL CHECK (stars >= 1 AND stars <= 5),
+  comment    text NOT NULL CHECK (char_length(comment) >= 1 AND char_length(comment) <= 100),
+  created_at timestamptz DEFAULT now(),
+  UNIQUE (event_id, ip_address)
+);
+
+-- ─────────────────────────────────────────
 -- Row Level Security (RLS)
 -- The backend uses the service role key, so RLS won't block it.
 -- Enable RLS to prevent direct client access.
@@ -92,6 +105,7 @@ ALTER TABLE events           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wishlist_items   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wishlist_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event_votes      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_ratings    ENABLE ROW LEVEL SECURITY;
 
 -- No public access policies — all access goes through the backend API
 -- using the service role key which bypasses RLS.

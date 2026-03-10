@@ -205,6 +205,37 @@ router.delete('/dashboard/:djToken', async (req, res) => {
   }
 });
 
+// Delete a rating comment (DJ only)
+router.delete('/dashboard/:djToken/ratings/:ratingId', async (req, res) => {
+  const { djToken, ratingId } = req.params;
+
+  try {
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('id, pin_hash')
+      .eq('dj_token', djToken)
+      .single();
+
+    if (error || !event) return res.status(404).json({ error: 'Event not found' });
+
+    const valid = await verifyDjAuth(req, event.pin_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
+
+    const { error: deleteError } = await supabase
+      .from('event_ratings')
+      .delete()
+      .eq('id', ratingId)
+      .eq('event_id', event.id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete rating error:', err);
+    res.status(500).json({ error: 'Failed to delete rating' });
+  }
+});
+
 // Get event for guests (public)
 router.get('/:guestToken', async (req, res) => {
   const { guestToken } = req.params;
@@ -359,81 +390,51 @@ router.post('/:guestToken/wishlist', async (req, res) => {
   }
 });
 
-// Get post-event votes
-router.get('/:guestToken/votes', async (req, res) => {
+// Get post-event event ratings
+router.get('/:guestToken/ratings', async (req, res) => {
   const { guestToken } = req.params;
   const ip = getClientIp(req);
 
   try {
     const { data: event, error } = await supabase
       .from('events')
-      .select('id, status, event_name, dj_name, event_date, venue')
+      .select('id, status')
       .eq('guest_token', guestToken)
       .single();
 
     if (error || !event) return res.status(404).json({ error: 'Event not found' });
     if (event.status !== 'finished') {
-      return res.status(403).json({ error: 'Voting is only available after the event ends' });
+      return res.status(403).json({ error: 'Ratings are only available after the event ends' });
     }
 
-    // Get all wishlist items
-    const { data: wishlist } = await supabase
-      .from('wishlist_items')
-      .select('*')
+    const { data: ratings } = await supabase
+      .from('event_ratings')
+      .select('id, stars, comment, created_at, ip_address')
       .eq('event_id', event.id)
-      .order('request_count', { ascending: false });
+      .order('created_at', { ascending: false });
 
-    // Get all votes for this event
-    const { data: votes } = await supabase
-      .from('event_votes')
-      .select('itunes_track_id, rating')
-      .eq('event_id', event.id);
+    const list = ratings || [];
+    const avg = list.length > 0
+      ? Math.round((list.reduce((s, r) => s + r.stars, 0) / list.length) * 10) / 10
+      : null;
+    const alreadyRated = list.some(r => r.ip_address === ip);
+    const publicRatings = list.map(({ ip_address, ...r }) => r);
 
-    // Get this IP's votes
-    const { data: myVotes } = await supabase
-      .from('event_votes')
-      .select('itunes_track_id, rating')
-      .eq('event_id', event.id)
-      .eq('ip_address', ip);
-
-    const myVoteMap = {};
-    (myVotes || []).forEach(v => { myVoteMap[String(v.itunes_track_id)] = v.rating; });
-
-    // Build vote stats per track
-    const voteStats = {};
-    (votes || []).forEach(v => {
-      const id = String(v.itunes_track_id);
-      if (!voteStats[id]) voteStats[id] = { total: 0, count: 0 };
-      voteStats[id].total += v.rating;
-      voteStats[id].count += 1;
-    });
-
-    const wishlistWithVotes = (wishlist || []).map(item => {
-      const id = String(item.itunes_track_id);
-      const stats = voteStats[id] || { total: 0, count: 0 };
-      return {
-        ...item,
-        averageRating: stats.count > 0 ? Math.round((stats.total / stats.count) * 10) / 10 : null,
-        totalVotes: stats.count,
-        userRating: myVoteMap[id] || null,
-      };
-    });
-
-    res.json({ event, wishlist: wishlistWithVotes });
+    res.json({ ratings: publicRatings, averageStars: avg, totalRatings: list.length, alreadyRated });
   } catch (err) {
-    console.error('Get votes error:', err);
-    res.status(500).json({ error: 'Failed to load votes' });
+    console.error('Get ratings error:', err);
+    res.status(500).json({ error: 'Failed to load ratings' });
   }
 });
 
-// Submit a vote for a song in a finished event
-router.post('/:guestToken/votes', async (req, res) => {
+// Submit a post-event event rating
+router.post('/:guestToken/ratings', async (req, res) => {
   const { guestToken } = req.params;
-  const { trackId, rating } = req.body;
+  const { stars, comment } = req.body;
   const ip = getClientIp(req);
 
-  if (!trackId || !rating || rating < 1 || rating > 10) {
-    return res.status(400).json({ error: 'trackId and rating (1-10) are required' });
+  if (!stars || stars < 1 || stars > 5 || !comment || comment.trim().length < 1 || comment.length > 100) {
+    return res.status(400).json({ error: 'stars (1–5) and comment (1–100 chars) are required' });
   }
 
   try {
@@ -445,57 +446,25 @@ router.post('/:guestToken/votes', async (req, res) => {
 
     if (error || !event) return res.status(404).json({ error: 'Event not found' });
     if (event.status !== 'finished') {
-      return res.status(403).json({ error: 'Voting is only open after the event ends' });
+      return res.status(403).json({ error: 'Ratings are only available after the event ends' });
     }
 
-    // Ensure the song is on the wishlist
-    const { data: wishlistItem } = await supabase
-      .from('wishlist_items')
-      .select('id')
-      .eq('event_id', event.id)
-      .eq('itunes_track_id', trackId)
-      .maybeSingle();
+    const { error: insertError } = await supabase
+      .from('event_ratings')
+      .insert({ event_id: event.id, ip_address: ip, stars: Number(stars), comment: comment.trim() });
 
-    if (!wishlistItem) {
-      return res.status(404).json({ error: 'This song is not on the event wishlist' });
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return res.status(409).json({ error: 'You have already rated this event' });
+      }
+      console.error('Submit rating insert error:', insertError);
+      return res.status(500).json({ error: insertError.message || 'Failed to submit rating' });
     }
 
-    // Upsert vote (one per IP per song per event)
-    const { error: voteError } = await supabase
-      .from('event_votes')
-      .upsert(
-        {
-          event_id: event.id,
-          itunes_track_id: trackId,
-          ip_address: ip,
-          rating: Number(rating),
-        },
-        { onConflict: 'event_id,itunes_track_id,ip_address' }
-      );
-
-    if (voteError) throw voteError;
-
-    // Return updated stats for this track
-    const { data: votes } = await supabase
-      .from('event_votes')
-      .select('rating')
-      .eq('event_id', event.id)
-      .eq('itunes_track_id', trackId);
-
-    const totalVotes = votes.length;
-    const avgRating = totalVotes > 0
-      ? votes.reduce((sum, v) => sum + v.rating, 0) / totalVotes
-      : null;
-
-    res.json({
-      success: true,
-      averageRating: avgRating ? Math.round(avgRating * 10) / 10 : null,
-      totalVotes,
-      userRating: Number(rating),
-    });
+    res.json({ success: true });
   } catch (err) {
-    console.error('Submit vote error:', err);
-    res.status(500).json({ error: 'Failed to submit vote' });
+    console.error('Submit rating error:', err);
+    res.status(500).json({ error: err.message || 'Failed to submit rating' });
   }
 });
 
