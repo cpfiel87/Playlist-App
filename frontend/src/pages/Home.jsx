@@ -5,12 +5,12 @@ export default function Home() {
     <main className="page">
       {/* Hero */}
       <section className="hero">
-        <p className="hero__eyebrow">DJ Playlist Manager</p>
+        <p className="hero__eyebrow">Dance Socials</p>
         <h1 className="hero__title">
-          Let The <em>Crowd</em> Decide
+          See Your Dance Socials In Your City
         </h1>
         <p className="hero__subtitle">
-          Create an event, share the link, and let your guests request the songs they want to hear.
+          Discover events near you, request the songs you want to hear, and rate the night after it ends.
         </p>
 
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 32 }}>
@@ -35,30 +35,30 @@ export default function Home() {
       >
         <FeatureCard
           icon="🎛"
-          title="Host an Event"
-          desc="Create an event with a PIN-protected dashboard. Share the guest link and watch requests roll in."
+          title="Find an Event"
+          desc="Browse dance socials happening in your city. See who's DJing, what's on the wishlist, and how past events were rated."
         />
         <FeatureCard
           icon="🎵"
-          title="Guest Wishlists"
-          desc="Guests search the iTunes catalog and request songs. The most-wanted tracks rise to the top."
+          title="Request Songs"
+          desc="Guests search the iTunes catalog and add songs to the wishlist. The most-requested tracks rise to the top."
         />
         <FeatureCard
           icon="🗳"
-          title="Post-Event Rating"
-          desc="After the night ends, guests can rate the event and leave a comment."
+          title="Rate the Night"
+          desc="After the event ends, leave a star rating and a short comment. Help others know which socials are worth going to."
         />
       </section>
 
       {/* CTA */}
       <section style={{ textAlign: 'center', marginTop: 80 }}>
         <div className="divider" style={{ marginBottom: 40 }} />
-        <h2 style={{ marginBottom: 16 }}>Ready to host?</h2>
+        <h2 style={{ marginBottom: 16 }}>Hosting a social?</h2>
         <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
           Set up your event in seconds. No account needed.
         </p>
         <Link to="/create-event" className="btn btn--primary">
-          Get Started
+          Create Event
         </Link>
       </section>
     </main>
