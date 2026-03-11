@@ -1,4 +1,6 @@
 import { Routes, Route, Link, NavLink } from 'react-router-dom';
+import mbcLogo from './assets/mbclogo.jpeg';
+import munich2 from './assets/munich2.jpg';
 import Home from './pages/Home.jsx';
 import EventCreate from './pages/EventCreate.jsx';
 import EventsList from './pages/EventsList.jsx';
@@ -8,10 +10,17 @@ import Admin from './pages/Admin.jsx';
 
 export default function App() {
   return (
-    <>
+    <div style={{
+      backgroundImage: `linear-gradient(rgba(8,8,8,0.78), rgba(8,8,8,0.78)), url(${munich2})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+      minHeight: '100vh',
+    }}>
       <nav className="nav">
         <Link to="/" className="nav__logo">
-          Rating Tool <span>for Socials</span>
+          <img src={mbcLogo} alt="MBC" style={{ height: '128px', width: '128px', objectFit: 'cover', borderRadius: '50%', marginRight: '12px', verticalAlign: 'middle' }} />
+          Dance Socials
         </Link>
         <ul className="nav__links">
           <li><NavLink to="/events">Events</NavLink></li>
@@ -37,7 +46,7 @@ export default function App() {
         marginTop: '80px',
       }}>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
-          RATING TOOL FOR SOCIALS — POWERED BY ITUNES &amp; SUPABASE
+          DANCE SOCIALS — POWERED BY ITUNES &amp; SUPABASE
         </p>
         <a
           href="https://www.instagram.com/gatokusi"
@@ -66,7 +75,7 @@ export default function App() {
           @gatokusi
         </a>
       </footer>
-    </>
+    </div>
   );
 }
 

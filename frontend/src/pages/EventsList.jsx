@@ -16,7 +16,7 @@ export default function EventsList() {
 
   useEffect(() => {
     fetch(`${API}/api/events`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(async data => {
         const evts = data.events || [];
         setEvents(evts);

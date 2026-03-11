@@ -15,8 +15,8 @@
   --border-2:   #333333;
 
   --text:       #f0ede8;
-  --text-muted: #888880;
-  --text-dim:   #555550;
+  --text-muted: #aaa89f;
+  --text-dim:   #7a7870;
 
   --accent:     #FF6B00;
   --accent-dim: #cc5500;
@@ -48,7 +48,7 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
@@ -104,8 +104,10 @@ img {
 }
 
 .nav__logo {
+  display: flex;
+  align-items: center;
   font-family: var(--font-serif);
-  font-size: 1.25rem;
+  font-size: 2.5rem;
   font-weight: 900;
   color: var(--text);
   letter-spacing: -0.02em;
@@ -123,9 +125,11 @@ img {
 
 .nav__links a {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 1.5rem;
   color: var(--text-muted);
   text-decoration: none;
+  border-bottom: 1px solid var(--text-muted);
+  padding-bottom: 2px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   transition: color 0.2s;
@@ -176,11 +180,11 @@ h3 { font-size: 1.25rem; font-weight: 700; }
 .btn--primary:hover { background: var(--accent-dim); text-decoration: none; }
 
 .btn--ghost {
-  background: transparent;
+  background: rgba(8, 8, 8, 0.6);
   color: var(--text-muted);
   border: 1px solid var(--border-2);
 }
-.btn--ghost:hover { border-color: var(--text-muted); color: var(--text); text-decoration: none; }
+.btn--ghost:hover { background: rgba(8, 8, 8, 0.8); border-color: var(--text-muted); color: var(--text); text-decoration: none; }
 
 .btn--danger {
   background: #c0392b;
