@@ -109,3 +109,20 @@ ALTER TABLE event_ratings    ENABLE ROW LEVEL SECURITY;
 
 -- No public access policies — all access goes through the backend API
 -- using the service role key which bypasses RLS.
+
+-- ─────────────────────────────────────────
+-- DJ reply to guest rating comments
+-- ─────────────────────────────────────────
+ALTER TABLE event_ratings ADD COLUMN IF NOT EXISTS dj_reply text;
+
+-- ─────────────────────────────────────────
+-- DJ notifications for live events
+-- ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS event_notifications (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id   uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  message    text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE event_notifications ENABLE ROW LEVEL SECURITY;

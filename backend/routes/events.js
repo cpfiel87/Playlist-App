@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('events')
-      .select('id, event_name, dj_name, event_date, venue, status, guest_token, dj_token')
+      .select('id, event_name, dj_name, event_date, venue, status, guest_token, dj_token, created_at')
       .order('event_date', { ascending: false });
 
     if (error) throw error;
@@ -116,7 +116,7 @@ router.get('/dashboard/:djToken', async (req, res) => {
   try {
     const { data: event, error } = await supabase
       .from('events')
-      .select('id, pin_hash, event_name, description, dj_name, event_date, venue, status, guest_token, dj_token')
+      .select('id, pin_hash, event_name, description, dj_name, event_date, venue, status, guest_token, dj_token, created_at')
       .eq('dj_token', djToken)
       .single();
 
@@ -125,15 +125,27 @@ router.get('/dashboard/:djToken', async (req, res) => {
     const valid = await verifyDjAuth(req, event.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
 
-    // Fetch wishlist sorted by request_count desc
     const { data: wishlist } = await supabase
       .from('wishlist_items')
       .select('*')
       .eq('event_id', event.id)
       .order('request_count', { ascending: false });
 
+    // Fetch current notification for active events
+    let notification = null;
+    if (event.status === 'active') {
+      const { data: notifData } = await supabase
+        .from('event_notifications')
+        .select('id, message, created_at')
+        .eq('event_id', event.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      notification = notifData || null;
+    }
+
     const { pin_hash, ...safeEvent } = event;
-    res.json({ event: safeEvent, wishlist: wishlist || [] });
+    res.json({ event: safeEvent, wishlist: wishlist || [], notification });
   } catch (err) {
     console.error('DJ dashboard error:', err);
     res.status(500).json({ error: 'Failed to load dashboard' });
@@ -186,7 +198,6 @@ router.delete('/dashboard/:djToken', async (req, res) => {
     const valid = await verifyDjAuth(req, event.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
 
-    // Delete related data first
     await supabase.from('event_votes').delete().eq('event_id', event.id);
     await supabase.from('wishlist_requests').delete().eq('event_id', event.id);
     await supabase.from('wishlist_items').delete().eq('event_id', event.id);
@@ -236,6 +247,106 @@ router.delete('/dashboard/:djToken/ratings/:ratingId', async (req, res) => {
   }
 });
 
+// Reply to a rating comment (DJ only)
+router.patch('/dashboard/:djToken/ratings/:ratingId/reply', async (req, res) => {
+  const { djToken, ratingId } = req.params;
+  const { reply } = req.body;
+
+  try {
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('id, pin_hash')
+      .eq('dj_token', djToken)
+      .single();
+
+    if (error || !event) return res.status(404).json({ error: 'Event not found' });
+
+    const valid = await verifyDjAuth(req, event.pin_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
+
+    const { error: updateError } = await supabase
+      .from('event_ratings')
+      .update({ dj_reply: reply && reply.trim() ? reply.trim() : null })
+      .eq('id', ratingId)
+      .eq('event_id', event.id);
+
+    if (updateError) throw updateError;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Reply to rating error:', err);
+    res.status(500).json({ error: 'Failed to save reply' });
+  }
+});
+
+// Post a notification for live event (DJ only)
+router.post('/dashboard/:djToken/notification', async (req, res) => {
+  const { djToken } = req.params;
+  const { message } = req.body;
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+  if (message.trim().length > 280) {
+    return res.status(400).json({ error: 'Message must be 280 characters or less' });
+  }
+
+  try {
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('id, pin_hash, status')
+      .eq('dj_token', djToken)
+      .single();
+
+    if (error || !event) return res.status(404).json({ error: 'Event not found' });
+    if (event.status !== 'active') return res.status(403).json({ error: 'Event is not active' });
+
+    const valid = await verifyDjAuth(req, event.pin_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
+
+    // Delete existing notifications and insert new one
+    await supabase.from('event_notifications').delete().eq('event_id', event.id);
+
+    const { data: notif, error: insertError } = await supabase
+      .from('event_notifications')
+      .insert({ event_id: event.id, message: message.trim() })
+      .select('id, message, created_at')
+      .single();
+
+    if (insertError) throw insertError;
+
+    res.json({ success: true, notification: notif });
+  } catch (err) {
+    console.error('Post notification error:', err);
+    res.status(500).json({ error: 'Failed to post notification' });
+  }
+});
+
+// Clear notification (DJ only)
+router.delete('/dashboard/:djToken/notification', async (req, res) => {
+  const { djToken } = req.params;
+
+  try {
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('id, pin_hash')
+      .eq('dj_token', djToken)
+      .single();
+
+    if (error || !event) return res.status(404).json({ error: 'Event not found' });
+
+    const valid = await verifyDjAuth(req, event.pin_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
+
+    await supabase.from('event_notifications').delete().eq('event_id', event.id);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Clear notification error:', err);
+    res.status(500).json({ error: 'Failed to clear notification' });
+  }
+});
+
 // Get event for guests (public)
 router.get('/:guestToken', async (req, res) => {
   const { guestToken } = req.params;
@@ -243,7 +354,7 @@ router.get('/:guestToken', async (req, res) => {
   try {
     const { data: event, error } = await supabase
       .from('events')
-      .select('id, event_name, description, dj_name, event_date, venue, status, guest_token')
+      .select('id, event_name, description, dj_name, event_date, venue, status, guest_token, created_at')
       .eq('guest_token', guestToken)
       .single();
 
@@ -276,7 +387,6 @@ router.get('/:guestToken/wishlist', async (req, res) => {
       .eq('event_id', event.id)
       .order('request_count', { ascending: false });
 
-    // Get which items this IP has already requested
     const { data: myRequests } = await supabase
       .from('wishlist_requests')
       .select('itunes_track_id')
@@ -319,7 +429,6 @@ router.post('/:guestToken/wishlist', async (req, res) => {
       return res.status(403).json({ error: 'This event has ended. Requests are closed.' });
     }
 
-    // Check if this IP already requested this song for this event
     const { data: existingRequest } = await supabase
       .from('wishlist_requests')
       .select('id')
@@ -332,7 +441,6 @@ router.post('/:guestToken/wishlist', async (req, res) => {
       return res.status(409).json({ error: 'You already requested this song', alreadyRequested: true });
     }
 
-    // Check if song is already on wishlist
     const { data: existingItem } = await supabase
       .from('wishlist_items')
       .select('id, request_count')
@@ -343,7 +451,6 @@ router.post('/:guestToken/wishlist', async (req, res) => {
     let wishlistItem;
 
     if (existingItem) {
-      // Increment request count
       const { data: updated, error: updateErr } = await supabase
         .from('wishlist_items')
         .update({ request_count: existingItem.request_count + 1 })
@@ -354,7 +461,6 @@ router.post('/:guestToken/wishlist', async (req, res) => {
       if (updateErr) throw updateErr;
       wishlistItem = updated;
     } else {
-      // Add new song to wishlist
       const { data: newItem, error: insertErr } = await supabase
         .from('wishlist_items')
         .insert({
@@ -374,7 +480,6 @@ router.post('/:guestToken/wishlist', async (req, res) => {
       wishlistItem = newItem;
     }
 
-    // Record the request from this IP
     await supabase
       .from('wishlist_requests')
       .insert({
@@ -387,6 +492,35 @@ router.post('/:guestToken/wishlist', async (req, res) => {
   } catch (err) {
     console.error('Add to wishlist error:', err);
     res.status(500).json({ error: 'Failed to add song to wishlist' });
+  }
+});
+
+// Get current notification for active event (public)
+router.get('/:guestToken/notification', async (req, res) => {
+  const { guestToken } = req.params;
+
+  try {
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('id, status')
+      .eq('guest_token', guestToken)
+      .single();
+
+    if (error || !event) return res.status(404).json({ error: 'Event not found' });
+    if (event.status !== 'active') return res.json({ notification: null });
+
+    const { data: notif } = await supabase
+      .from('event_notifications')
+      .select('message, created_at')
+      .eq('event_id', event.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    res.json({ notification: notif || null });
+  } catch (err) {
+    console.error('Get notification error:', err);
+    res.status(500).json({ error: 'Failed to load notification' });
   }
 });
 
@@ -409,7 +543,7 @@ router.get('/:guestToken/ratings', async (req, res) => {
 
     const { data: ratings } = await supabase
       .from('event_ratings')
-      .select('id, stars, comment, created_at, ip_address')
+      .select('id, stars, comment, created_at, ip_address, dj_reply')
       .eq('event_id', event.id)
       .order('created_at', { ascending: false });
 

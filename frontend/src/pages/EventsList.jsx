@@ -112,10 +112,15 @@ export default function EventsList() {
                   <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     {event.dj_name} · {new Date(event.event_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} · {event.venue}
                   </p>
+                  {event.created_at && (
+                    <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                      Created {new Date(event.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <a
-                    href={`/view/${event.guest_token}`}
+                    href={`/event/${event.guest_token}`}
                     className="btn btn--ghost"
                     style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
                   >

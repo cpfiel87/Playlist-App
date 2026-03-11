@@ -4,7 +4,6 @@ import EventCreate from './pages/EventCreate.jsx';
 import EventsList from './pages/EventsList.jsx';
 import GuestEvent from './pages/GuestEvent.jsx';
 import DJDashboard from './pages/DJDashboard.jsx';
-import EventView from './pages/EventView.jsx';
 import Admin from './pages/Admin.jsx';
 
 export default function App() {
@@ -25,7 +24,7 @@ export default function App() {
         <Route path="/create-event" element={<EventCreate />} />
         <Route path="/events" element={<EventsList />} />
         <Route path="/event/:guestToken" element={<GuestEvent />} />
-        <Route path="/view/:guestToken" element={<EventView />} />
+        <Route path="/view/:guestToken" element={<GuestEvent />} />
         <Route path="/dashboard/:djToken" element={<DJDashboard />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<NotFound />} />

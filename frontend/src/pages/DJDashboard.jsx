@@ -27,9 +27,16 @@ export default function DJDashboard() {
   const [ratings, setRatings] = useState([]);
   const [avgStars, setAvgStars] = useState(null);
   const [totalRatings, setTotalRatings] = useState(0);
+
+  // Notification state
+  const [notification, setNotification] = useState(null);
+  const [notifDraft, setNotifDraft] = useState('');
+  const [savingNotif, setSavingNotif] = useState(false);
+  const [clearingNotif, setClearingNotif] = useState(false);
+  const notifInitialized = useRef(false);
+
   const pollRef = useRef(null);
 
-  // Check sessionStorage for already-verified PIN or master key
   useEffect(() => {
     const storedMk = sessionStorage.getItem(MASTER_KEY_SESSION);
     if (storedMk) {
@@ -76,6 +83,14 @@ export default function DJDashboard() {
       setWishlist(data.wishlist || []);
       if (data.event?.status === 'finished') {
         loadRatings(data.event.guest_token);
+      }
+      // Update notification from dashboard response (active events only)
+      if (data.event?.status === 'active') {
+        setNotification(data.notification || null);
+        if (!notifInitialized.current && data.notification) {
+          setNotifDraft(data.notification.message);
+          notifInitialized.current = true;
+        }
       }
     } catch (err) {
       setError(err.message);
@@ -141,12 +156,52 @@ export default function DJDashboard() {
         headers,
       });
       if (!res.ok) throw new Error('Failed to delete event');
-      // Redirect to events list after deletion
       window.location.href = '/events';
     } catch (err) {
       setError(err.message);
       setDeleting(false);
       setDeleteConfirm(false);
+    }
+  }
+
+  async function handlePostNotification() {
+    if (!notifDraft.trim()) return;
+    setSavingNotif(true);
+    try {
+      const headers = masterKey
+        ? { 'x-master-key': masterKey, 'Content-Type': 'application/json' }
+        : { 'x-dj-pin': savedPin, 'Content-Type': 'application/json' };
+      const res = await fetch(`${API}/api/events/dashboard/${djToken}/notification`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: notifDraft }),
+      });
+      if (!res.ok) throw new Error('Failed to post notification');
+      const data = await res.json();
+      setNotification(data.notification);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingNotif(false);
+    }
+  }
+
+  async function handleClearNotification() {
+    setClearingNotif(true);
+    try {
+      const headers = masterKey ? { 'x-master-key': masterKey } : { 'x-dj-pin': savedPin };
+      const res = await fetch(`${API}/api/events/dashboard/${djToken}/notification`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!res.ok) throw new Error('Failed to clear notification');
+      setNotification(null);
+      setNotifDraft('');
+      notifInitialized.current = false;
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setClearingNotif(false);
     }
   }
 
@@ -247,6 +302,9 @@ export default function DJDashboard() {
             {event?.dj_name} &nbsp;·&nbsp;{' '}
             {event?.event_date && new Date(event.event_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             &nbsp;·&nbsp; {event?.venue}
+            {event?.created_at && (
+              <>&nbsp;·&nbsp; Created {new Date(event.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+            )}
           </p>
           {event?.description && (
             <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: '0.9rem', lineHeight: 1.6, fontFamily: 'var(--font-body)' }}>
@@ -267,19 +325,12 @@ export default function DJDashboard() {
 
           {event?.status !== 'finished' && (
             !finishConfirm ? (
-              <button
-                className="btn btn--danger"
-                onClick={() => setFinishConfirm(true)}
-              >
+              <button className="btn btn--danger" onClick={() => setFinishConfirm(true)}>
                 End Event
               </button>
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  className="btn btn--danger"
-                  onClick={handleFinishEvent}
-                  disabled={finishing}
-                >
+                <button className="btn btn--danger" onClick={handleFinishEvent} disabled={finishing}>
                   {finishing ? 'Ending…' : 'Confirm End'}
                 </button>
                 <button className="btn btn--ghost" onClick={() => setFinishConfirm(false)}>
@@ -299,11 +350,7 @@ export default function DJDashboard() {
             </button>
           ) : (
             <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                className="btn btn--danger"
-                onClick={handleDeleteEvent}
-                disabled={deleting}
-              >
+              <button className="btn btn--danger" onClick={handleDeleteEvent} disabled={deleting}>
                 {deleting ? 'Deleting…' : 'Confirm Delete'}
               </button>
               <button className="btn btn--ghost" onClick={() => setDeleteConfirm(false)}>
@@ -330,10 +377,7 @@ export default function DJDashboard() {
         }}
       >
         <Stat label="Songs Requested" value={wishlist.length} />
-        <Stat
-          label="Total Requests"
-          value={wishlist.reduce((s, i) => s + i.request_count, 0)}
-        />
+        <Stat label="Total Requests" value={wishlist.reduce((s, i) => s + i.request_count, 0)} />
         {wishlist[0] && <Stat label="Most Wanted" value={wishlist[0].title} mono={false} />}
       </div>
 
@@ -354,6 +398,7 @@ export default function DJDashboard() {
               setRatings(prev => prev.filter(r => r.id !== id));
               setTotalRatings(prev => prev - 1);
             }}
+            onReply={(id, reply) => setRatings(prev => prev.map(r => r.id === id ? { ...r, dj_reply: reply } : r))}
           />
 
           <section>
@@ -380,42 +425,108 @@ export default function DJDashboard() {
           </section>
         </div>
       ) : (
-        /* Active event: full-width wishlist */
-        <>
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <h2 style={{ fontSize: '1.2rem' }}>Crowd Wishlist — Ranked by Requests</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
-                Updates every 6 seconds.
-                {loading && <span style={{ color: 'var(--accent)', marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Refreshing…</span>}
-              </p>
-            </div>
-            {wishlist.length > 0 && (
-              <button className="btn btn--ghost" onClick={exportCSV} style={{ fontSize: '0.8rem' }}>
-                Export CSV
-              </button>
+        /* Active event: 2-col notification editor + wishlist */
+        <div
+          className="dj-active-layout"
+          style={{ display: 'grid', gridTemplateColumns: 'minmax(0,320px) minmax(0,1fr)', gap: 32, alignItems: 'start' }}
+        >
+          {/* Notification Editor */}
+          <section>
+            <h2 style={{ fontSize: '1.2rem', marginBottom: 16 }}>Broadcast</h2>
+
+            {notification && (
+              <div className="card" style={{ borderLeft: '3px solid var(--accent)', padding: '16px 20px', marginBottom: 16 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: 6 }}>
+                  LIVE ANNOUNCEMENT
+                </div>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.6 }}>
+                  {notification.message}
+                </p>
+              </div>
             )}
-          </div>
-          {wishlist.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-              <div style={{ fontSize: '2rem', marginBottom: 12, opacity: 0.3 }}>♪</div>
-              <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                No requests yet. Share the guest link to get things started.
-              </p>
+
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <textarea
+                className="form-input"
+                value={notifDraft}
+                onChange={e => setNotifDraft(e.target.value.slice(0, 280))}
+                placeholder="Type an announcement for guests…"
+                rows={4}
+                style={{ resize: 'vertical', paddingBottom: 28 }}
+              />
+              <span style={{
+                position: 'absolute', bottom: 8, right: 12,
+                fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
+                color: notifDraft.length >= 250 ? 'var(--accent)' : 'var(--text-dim)',
+                pointerEvents: 'none',
+              }}>
+                {notifDraft.length}/280
+              </span>
             </div>
-          ) : (
-            <div className="stack" style={{ gap: 8 }}>
-              {wishlist.map((item, i) => (
-                <DashboardWishlistRow key={item.id} item={item} rank={i + 1} />
-              ))}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn--primary"
+                style={{ flex: 1, fontSize: '0.85rem' }}
+                disabled={savingNotif || notifDraft.trim().length < 1}
+                onClick={handlePostNotification}
+              >
+                {savingNotif ? 'Posting…' : notification ? 'Update' : 'Post'}
+              </button>
+              {notification && (
+                <button
+                  className="btn btn--ghost"
+                  style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}
+                  disabled={clearingNotif}
+                  onClick={handleClearNotification}
+                >
+                  {clearingNotif ? '…' : 'Clear'}
+                </button>
+              )}
             </div>
-          )}
-        </>
+            <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem', marginTop: 10, lineHeight: 1.5 }}>
+              Guests see this in real time. Posting overwrites the current announcement.
+            </p>
+          </section>
+
+          {/* Wishlist */}
+          <section>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h2 style={{ fontSize: '1.2rem' }}>Crowd Wishlist — Ranked by Requests</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
+                  Updates every 6 seconds.
+                  {loading && <span style={{ color: 'var(--accent)', marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Refreshing…</span>}
+                </p>
+              </div>
+              {wishlist.length > 0 && (
+                <button className="btn btn--ghost" onClick={exportCSV} style={{ fontSize: '0.8rem' }}>
+                  Export CSV
+                </button>
+              )}
+            </div>
+            {wishlist.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: 48 }}>
+                <div style={{ fontSize: '2rem', marginBottom: 12, opacity: 0.3 }}>♪</div>
+                <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                  No requests yet. Share the guest link to get things started.
+                </p>
+              </div>
+            ) : (
+              <div className="stack" style={{ gap: 8 }}>
+                {wishlist.map((item, i) => (
+                  <DashboardWishlistRow key={item.id} item={item} rank={i + 1} />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       )}
 
       <style>{`
         @media (max-width: 720px) {
           .dj-finished-layout { grid-template-columns: 1fr !important; }
+          .dj-active-layout { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </main>
@@ -436,8 +547,11 @@ function Stat({ label, value, mono = true }) {
   );
 }
 
-function RatingsPanel({ ratings, avgStars, totalRatings, djToken, savedPin, masterKey, onDelete }) {
+function RatingsPanel({ ratings, avgStars, totalRatings, djToken, savedPin, masterKey, onDelete, onReply }) {
   const [deletingId, setDeletingId] = useState(null);
+  const [replyingId, setReplyingId] = useState(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [savingReplyId, setSavingReplyId] = useState(null);
 
   async function handleDelete(ratingId) {
     setDeletingId(ratingId);
@@ -455,6 +569,32 @@ function RatingsPanel({ ratings, avgStars, totalRatings, djToken, savedPin, mast
     }
   }
 
+  async function handleSaveReply(ratingId) {
+    setSavingReplyId(ratingId);
+    try {
+      const headers = masterKey
+        ? { 'x-master-key': masterKey, 'Content-Type': 'application/json' }
+        : { 'x-dj-pin': savedPin, 'Content-Type': 'application/json' };
+      const res = await fetch(`${API}/api/events/dashboard/${djToken}/ratings/${ratingId}/reply`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ reply: replyDraft }),
+      });
+      if (res.ok) {
+        onReply(ratingId, replyDraft.trim() || null);
+        setReplyingId(null);
+        setReplyDraft('');
+      }
+    } finally {
+      setSavingReplyId(null);
+    }
+  }
+
+  function startReply(r) {
+    setReplyingId(r.id);
+    setReplyDraft(r.dj_reply || '');
+  }
+
   return (
     <section>
       <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>
@@ -469,26 +609,94 @@ function RatingsPanel({ ratings, avgStars, totalRatings, djToken, savedPin, mast
       ) : (
         <div className="stack" style={{ gap: 12 }}>
           {ratings.map(r => (
-            <div key={r.id} className="card" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <StarRating value={r.stars} size={18} />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                    {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
+            <div key={r.id} className="card" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <StarRating value={r.stars} size={18} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                      {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                    {r.comment}
+                  </p>
+
+                  {/* DJ Reply display */}
+                  {r.dj_reply && replyingId !== r.id && (
+                    <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: '2px solid var(--accent)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--accent)', letterSpacing: '0.08em', marginBottom: 4 }}>
+                        YOUR RESPONSE
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                        {r.dj_reply}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Reply input */}
+                  {replyingId === r.id && (
+                    <div style={{ marginTop: 12 }}>
+                      <textarea
+                        className="form-input"
+                        value={replyDraft}
+                        onChange={e => setReplyDraft(e.target.value)}
+                        placeholder="Write your response…"
+                        rows={2}
+                        style={{ resize: 'vertical', fontSize: '0.85rem' }}
+                        autoFocus
+                      />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button
+                          className="btn btn--primary"
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem' }}
+                          onClick={() => handleSaveReply(r.id)}
+                          disabled={savingReplyId === r.id}
+                        >
+                          {savingReplyId === r.id ? '…' : 'Save'}
+                        </button>
+                        <button
+                          className="btn btn--ghost"
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem' }}
+                          onClick={() => { setReplyingId(null); setReplyDraft(''); }}
+                        >
+                          Cancel
+                        </button>
+                        {r.dj_reply && (
+                          <button
+                            className="btn btn--ghost"
+                            style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', color: 'var(--text-dim)' }}
+                            onClick={() => { setReplyDraft(''); handleSaveReply(r.id); }}
+                            disabled={savingReplyId === r.id}
+                          >
+                            Remove reply
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reply / Edit button */}
+                  {replyingId !== r.id && (
+                    <button
+                      className="btn btn--ghost"
+                      style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem', marginTop: 10, color: 'var(--text-dim)' }}
+                      onClick={() => startReply(r)}
+                    >
+                      {r.dj_reply ? 'Edit reply' : 'Reply'}
+                    </button>
+                  )}
                 </div>
-                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>
-                  {r.comment}
-                </p>
+
+                <button
+                  className="btn btn--ghost"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', color: 'var(--text-dim)', flexShrink: 0 }}
+                  onClick={() => handleDelete(r.id)}
+                  disabled={deletingId === r.id}
+                >
+                  {deletingId === r.id ? '…' : 'Delete'}
+                </button>
               </div>
-              <button
-                className="btn btn--ghost"
-                style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', color: 'var(--text-dim)', flexShrink: 0 }}
-                onClick={() => handleDelete(r.id)}
-                disabled={deletingId === r.id}
-              >
-                {deletingId === r.id ? '…' : 'Delete'}
-              </button>
             </div>
           ))}
         </div>

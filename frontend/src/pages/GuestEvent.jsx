@@ -13,7 +13,9 @@ export default function GuestEvent() {
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [searchResults, setSearchResults] = useState([]);
   const [error, setError] = useState(null);
+  const [notification, setNotification] = useState(null);
   const pollRef = useRef(null);
+  const notifPollRef = useRef(null);
 
   const loadEvent = useCallback(async () => {
     try {
@@ -37,13 +39,28 @@ export default function GuestEvent() {
     } catch {}
   }, [guestToken]);
 
+  const loadNotification = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/events/${guestToken}/notification`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotification(data.notification);
+    } catch {}
+  }, [guestToken]);
+
   useEffect(() => {
     loadEvent();
     loadWishlist();
-    // Poll wishlist every 8 seconds for real-time updates
     pollRef.current = setInterval(loadWishlist, 8000);
     return () => clearInterval(pollRef.current);
   }, [loadEvent, loadWishlist]);
+
+  useEffect(() => {
+    if (event?.status !== 'active') return;
+    loadNotification();
+    notifPollRef.current = setInterval(loadNotification, 10000);
+    return () => clearInterval(notifPollRef.current);
+  }, [event?.status, loadNotification]);
 
   if (loadingEvent) return (
     <div className="loading-center"><div className="spinner" /></div>
@@ -75,6 +92,9 @@ export default function GuestEvent() {
           {event?.dj_name} &nbsp;·&nbsp;{' '}
           {event?.event_date && new Date(event.event_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           &nbsp;·&nbsp; {event?.venue}
+          {event?.created_at && (
+            <>&nbsp;·&nbsp; Created {new Date(event.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+          )}
         </p>
         {event?.description && (
           <p style={{ color: 'var(--text-muted)', marginTop: 10, fontSize: '0.95rem', lineHeight: 1.6 }}>
@@ -83,11 +103,11 @@ export default function GuestEvent() {
         )}
       </div>
 
-      {/* Two-column layout */}
+      {/* Three-column layout: Search | Announcement | Wishlist */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0,1fr) minmax(0,380px)',
+          gridTemplateColumns: 'minmax(0,1fr) minmax(0,260px) minmax(0,360px)',
           gap: 32,
           alignItems: 'start',
         }}
@@ -121,6 +141,27 @@ export default function GuestEvent() {
           )}
         </section>
 
+        {/* DJ Announcement */}
+        <section>
+          <h2 style={{ marginBottom: 20, fontSize: '1.3rem' }}>Announcement</h2>
+          {notification ? (
+            <div className="card" style={{ borderLeft: '3px solid var(--accent)', padding: '20px 20px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: 10 }}>
+                DJ ANNOUNCEMENT
+              </div>
+              <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.7, color: 'var(--text)' }}>
+                {notification.message}
+              </p>
+            </div>
+          ) : (
+            <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
+              <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', margin: 0 }}>
+                No announcements yet.
+              </p>
+            </div>
+          )}
+        </section>
+
         {/* Wishlist */}
         <section>
           <div className="row" style={{ marginBottom: 20 }}>
@@ -145,7 +186,7 @@ export default function GuestEvent() {
       </div>
 
       <style>{`
-        @media (max-width: 720px) {
+        @media (max-width: 900px) {
           .guest-layout {
             grid-template-columns: 1fr !important;
           }
@@ -165,6 +206,7 @@ function FinishedEvent({ event, guestToken }) {
   const [totalRatings, setTotalRatings] = useState(0);
   const [alreadyRated, setAlreadyRated] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [wishlist, setWishlist] = useState([]);
 
   const loadRatings = useCallback(async () => {
     try {
@@ -178,7 +220,13 @@ function FinishedEvent({ event, guestToken }) {
     } catch {}
   }, [guestToken]);
 
-  useEffect(() => { loadRatings(); }, [loadRatings]);
+  useEffect(() => {
+    loadRatings();
+    fetch(`${API}/api/events/${guestToken}/wishlist`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setWishlist(data.wishlist || []); })
+      .catch(() => {});
+  }, [loadRatings, guestToken]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -205,89 +253,155 @@ function FinishedEvent({ event, guestToken }) {
   }
 
   return (
-    <main className="page" style={{ maxWidth: 640 }}>
-      <div style={{ textAlign: 'center', paddingTop: 60, marginBottom: 40 }}>
-        <span className="badge badge--finished" style={{ display: 'inline-flex', marginBottom: 24 }}>
-          <span className="badge--dot" />
-          Event Ended
-        </span>
-        <h1 style={{ marginBottom: 8 }}>{event.event_name}</h1>
+    <main className="page page--wide">
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <span className="badge badge--finished">
+            <span className="badge--dot" />
+            Event Ended
+          </span>
+          {avgStars !== null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <StarRating value={avgStars} size={16} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {avgStars} · {totalRatings} {totalRatings === 1 ? 'rating' : 'ratings'}
+              </span>
+            </div>
+          )}
+        </div>
+        <h1 style={{ marginBottom: 6 }}>{event.event_name}</h1>
         <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-          {event.dj_name} &nbsp;·&nbsp; {event.venue}
+          {event.dj_name} &nbsp;·&nbsp;{' '}
+          {event.event_date && new Date(event.event_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          &nbsp;·&nbsp; {event.venue}
+          {event.created_at && (
+            <>&nbsp;·&nbsp; Created {new Date(event.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+          )}
         </p>
+        {event.description && (
+          <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: '0.9rem', lineHeight: 1.6 }}>
+            {event.description}
+          </p>
+        )}
       </div>
 
-      {!alreadyRated && !submitted ? (
-        <div className="card" style={{ padding: 28, marginBottom: 32 }}>
-          <h2 style={{ fontSize: '1.1rem', marginBottom: 20 }}>Rate This Event</h2>
-          <form onSubmit={handleSubmit} className="stack" style={{ gap: 20 }}>
-            <div>
-              <label className="form-label" style={{ display: 'block', marginBottom: 10 }}>Stars</label>
-              <StarRating value={stars} onChange={setStars} size={32} />
-            </div>
-            <div>
-              <label className="form-label">Comment</label>
-              <div style={{ position: 'relative' }}>
-                <textarea
-                  className="form-input"
-                  value={comment}
-                  onChange={e => setComment(e.target.value.slice(0, 100))}
-                  placeholder="Share your experience…"
-                  rows={4}
-                  style={{ resize: 'vertical', paddingBottom: 28 }}
-                />
-                <span style={{
-                  position: 'absolute', bottom: 8, right: 12,
-                  fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
-                  color: comment.length >= 90 ? 'var(--accent)' : 'var(--text-dim)',
-                  pointerEvents: 'none',
-                }}>
-                  {comment.length}/100
-                </span>
-              </div>
-            </div>
-            {submitError && <div className="alert alert--error">{submitError}</div>}
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={submitting || stars < 1 || comment.trim().length < 1}
-            >
-              {submitting ? 'Submitting…' : 'Submit Rating'}
-            </button>
-          </form>
-        </div>
-      ) : (
-        <div className="card" style={{ padding: 28, marginBottom: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', marginBottom: 8, color: '#FFB800' }}>★</div>
-          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Thanks for your rating!</p>
-        </div>
-      )}
-
-      {totalRatings > 0 && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Ratings</h2>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              ★ {avgStars} · {totalRatings} {totalRatings === 1 ? 'rating' : 'ratings'}
-            </span>
-          </div>
-          <div className="stack" style={{ gap: 12 }}>
-            {ratings.map(r => (
-              <div key={r.id} className="card" style={{ padding: '14px 18px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <StarRating value={r.stars} size={16} />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-dim)' }}>
-                    {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
+      {/* Two-column: ratings left, wishlist right */}
+      <div
+        className="finished-layout"
+        style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,360px)', gap: 32, alignItems: 'start' }}
+      >
+        {/* Left: rating form + ratings list */}
+        <section>
+          {!alreadyRated && !submitted ? (
+            <div className="card" style={{ padding: 28, marginBottom: 32 }}>
+              <h2 style={{ fontSize: '1.1rem', marginBottom: 20 }}>Rate This Event</h2>
+              <form onSubmit={handleSubmit} className="stack" style={{ gap: 20 }}>
+                <div>
+                  <label className="form-label" style={{ display: 'block', marginBottom: 10 }}>Stars</label>
+                  <StarRating value={stars} onChange={setStars} size={32} />
                 </div>
-                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                  {r.comment}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+                <div>
+                  <label className="form-label">Comment</label>
+                  <div style={{ position: 'relative' }}>
+                    <textarea
+                      className="form-input"
+                      value={comment}
+                      onChange={e => setComment(e.target.value.slice(0, 100))}
+                      placeholder="Share your experience…"
+                      rows={4}
+                      style={{ resize: 'vertical', paddingBottom: 28 }}
+                    />
+                    <span style={{
+                      position: 'absolute', bottom: 8, right: 12,
+                      fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
+                      color: comment.length >= 90 ? 'var(--accent)' : 'var(--text-dim)',
+                      pointerEvents: 'none',
+                    }}>
+                      {comment.length}/100
+                    </span>
+                  </div>
+                </div>
+                {submitError && <div className="alert alert--error">{submitError}</div>}
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={submitting || stars < 1 || comment.trim().length < 1}
+                >
+                  {submitting ? 'Submitting…' : 'Submit Rating'}
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 28, marginBottom: 32, textAlign: 'center' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 8, color: '#FFB800' }}>★</div>
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>Thanks for your rating!</p>
+            </div>
+          )}
+
+          <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>
+            {totalRatings > 0 ? `${totalRatings} ${totalRatings === 1 ? 'Rating' : 'Ratings'}` : 'Ratings'}
+          </h2>
+          {ratings.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 28 }}>
+              <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                No ratings yet. Be the first!
+              </p>
+            </div>
+          ) : (
+            <div className="stack" style={{ gap: 12 }}>
+              {ratings.map(r => (
+                <div key={r.id} className="card" style={{ padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <StarRating value={r.stars} size={16} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-dim)' }}>
+                      {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                    {r.comment}
+                  </p>
+                  {r.dj_reply && (
+                    <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: '2px solid var(--accent)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--accent)', letterSpacing: '0.08em', marginBottom: 4 }}>
+                        DJ RESPONSE
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                        {r.dj_reply}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Right: wishlist */}
+        <section>
+          <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>Crowd Wishlist</h2>
+          {wishlist.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: 8, opacity: 0.3 }}>♪</div>
+              <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                No requests for this event.
+              </p>
+            </div>
+          ) : (
+            <div className="stack" style={{ gap: 8 }}>
+              {wishlist.map((item, i) => (
+                <WishlistRow key={item.id} item={item} rank={i + 1} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <style>{`
+        @media (max-width: 720px) {
+          .finished-layout { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </main>
   );
 }
