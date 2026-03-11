@@ -103,11 +103,11 @@ export default function GuestEvent() {
         )}
       </div>
 
-      {/* Three-column layout: Search | Announcement | Wishlist */}
+      {/* Two-column layout: Search left | Announcement + Wishlist right */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0,1fr) minmax(0,260px) minmax(0,360px)',
+          gridTemplateColumns: 'minmax(0,1fr) minmax(0,380px)',
           gap: 32,
           alignItems: 'start',
         }}
@@ -141,52 +141,48 @@ export default function GuestEvent() {
           )}
         </section>
 
-        {/* DJ Announcement */}
-        <section>
-          <h2 style={{ marginBottom: 20, fontSize: '1.3rem' }}>Announcement</h2>
-          {notification ? (
-            <div className="card" style={{ borderLeft: '3px solid var(--accent)', padding: '20px 20px' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: 10 }}>
-                DJ ANNOUNCEMENT
+        {/* Right column: Announcement + Wishlist stacked */}
+        <div className="stack" style={{ gap: 24 }}>
+          {/* DJ Announcement — only show if there is one */}
+          {notification && (
+            <section>
+              <div className="card" style={{ borderLeft: '3px solid var(--accent)', padding: '16px 20px' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: 8 }}>
+                  DJ ANNOUNCEMENT
+                </div>
+                <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.7, color: 'var(--text)' }}>
+                  {notification.message}
+                </p>
               </div>
-              <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.7, color: 'var(--text)' }}>
-                {notification.message}
-              </p>
-            </div>
-          ) : (
-            <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
-              <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', margin: 0 }}>
-                No announcements yet.
-              </p>
-            </div>
+            </section>
           )}
-        </section>
 
-        {/* Wishlist */}
-        <section>
-          <div className="row" style={{ marginBottom: 20 }}>
-            <h2 style={{ fontSize: '1.3rem', flex: 1 }}>Wishlist</h2>
-            <span className="label">{wishlist.length} songs</span>
-          </div>
+          {/* Wishlist */}
+          <section>
+            <div className="row" style={{ marginBottom: 20 }}>
+              <h2 style={{ fontSize: '1.3rem', flex: 1 }}>Wishlist</h2>
+              <span className="label">{wishlist.length} songs</span>
+            </div>
 
-          {wishlist.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-              <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                No requests yet.<br />Be the first!
-              </p>
-            </div>
-          ) : (
-            <div className="stack" style={{ gap: 8 }}>
-              {wishlist.map((item, i) => (
-                <WishlistRow key={item.id} item={item} rank={i + 1} />
-              ))}
-            </div>
-          )}
-        </section>
+            {wishlist.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+                <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                  No requests yet.<br />Be the first!
+                </p>
+              </div>
+            ) : (
+              <div className="stack" style={{ gap: 8 }}>
+                {wishlist.map((item, i) => (
+                  <WishlistRow key={item.id} item={item} rank={i + 1} />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
 
       <style>{`
-        @media (max-width: 900px) {
+        @media (max-width: 720px) {
           .guest-layout {
             grid-template-columns: 1fr !important;
           }
