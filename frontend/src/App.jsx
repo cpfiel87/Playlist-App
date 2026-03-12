@@ -1,5 +1,4 @@
 import { Routes, Route, Link, NavLink } from 'react-router-dom';
-import mbcLogo from './assets/mbclogo.jpeg';
 import munich2 from './assets/munich2.jpg';
 import Home from './pages/Home.jsx';
 import EventCreate from './pages/EventCreate.jsx';
@@ -19,8 +18,7 @@ export default function App() {
     }}>
       <nav className="nav">
         <Link to="/" className="nav__logo">
-          <img src={mbcLogo} alt="MBC" style={{ height: '128px', width: '128px', objectFit: 'cover', borderRadius: '50%', marginRight: '12px', verticalAlign: 'middle' }} />
-          Dance Socials
+          Dance Socials - Munich
         </Link>
         <ul className="nav__links">
           <li><NavLink to="/events">Events</NavLink></li>
